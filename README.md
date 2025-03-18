@@ -52,6 +52,8 @@ idf.py build flash monitor
 │   ├── mpu6050.c               # MPU6050 sensor interface
 │   ├── model.h                 # TensorFlow Lite model (generated as xxd array)
 │   ├── main.c                  # Main entry point
+│   ├── pwm.h                   # Light PWM header
+│   ├── pwm.c                   # Light PWM source
 │   ├── CMakeLists.txt          # Build configuration
 ├── include
 │   ├── mpu6050.h               # Header file for MPU6050 sensor
