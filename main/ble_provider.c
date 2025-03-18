@@ -1,7 +1,9 @@
 #include "ble_provider.h"
+#include "pwm.h"
 
 #define MAX_DATA_LEN 256
 #define BLE_SAMPLE_SIZE 375
+#define FEATURES 4
 
 char stored_data[MAX_DATA_LEN] = "No Data";
 uint16_t rate_handle;
@@ -10,22 +12,22 @@ bool notify_enabled = false;
 uint8_t compressed_data[BLE_SAMPLE_SIZE];
 char *TAG = "BLE-Server";
 uint8_t ble_addr_type;
-static const char* gestures[] = {"Circle", "Cross", "Pad"};
+static const char* gestures[] = {"Circle", "Cross", "Pad", "Fixed"};
 
 // Array of pointers to other service definitions
 // UUID - Universal Unique Identifier
 const struct ble_gatt_svc_def gatt_svcs[] = {
     {.type = BLE_GATT_SVC_TYPE_PRIMARY,
-     .uuid = BLE_UUID16_DECLARE(0x180D), // Define UUID for device type
+     .uuid = BLE_UUID128_DECLARE(0x2c9fdd5d, 0x990c, 0x4801, 0x80c6, 0xac7eff021a8f), // Define UUID for device type
      .characteristics = (struct ble_gatt_chr_def[]){
-         {.uuid = BLE_UUID16_DECLARE(0x2A37), // Rate Measurement characteristic
+         {.uuid = BLE_UUID128_DECLARE(0xba851a41, 0x1fd6, 0x4501, 0x8ad0, 0xf715adf43e4e), // Rate Measurement characteristic
           .flags = BLE_GATT_CHR_F_NOTIFY,
           .access_cb = rate_notify, // Callback for notifications
           .val_handle = &rate_handle},
-         {.uuid = BLE_UUID16_DECLARE(0x2A19), // Define UUID for reading
+         {.uuid = BLE_UUID128_DECLARE(0xe24d9433, 0x9255, 0x4880, 0xb56e, 0xc09529224418), // Define UUID for reading
           .flags = BLE_GATT_CHR_F_READ,
           .access_cb = device_read},
-         {.uuid = BLE_UUID16_DECLARE(0x2A39), // Define UUID for writing
+         {.uuid = BLE_UUID128_DECLARE(0xca561598, 0xf8ba, 0x41a4, 0xbcc1, 0x17c269355adc), // Define UUID for writing
           .flags = BLE_GATT_CHR_F_WRITE,
           .access_cb = device_write},
          {0}}},
@@ -65,6 +67,12 @@ int device_write(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_acc
     memcpy(stored_data, ctxt->om->om_data, len);
     stored_data[len] = '\0';
     printf("Data from the client: %.*s\n", ctxt->om->om_len, ctxt->om->om_data);
+
+    int duty = 0;
+    memcpy(&duty, ctxt->om->om_data, len);
+    printf("The value of duty is: %d\n", duty);
+    pwm_set_duty(duty);
+
     return 0;
 }
 
@@ -94,6 +102,7 @@ int ble_gap_event(struct ble_gap_event *event, void *arg)
         if (event->connect.status != 0)
         {
             ble_app_advertise();
+            pwm_start();
         }
         break;
     case BLE_GAP_EVENT_SUBSCRIBE:
@@ -102,6 +111,7 @@ int ble_gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "Device disconnected, restarting advertising...");
         ble_app_advertise();
+        pwm_stop();
         break;
     case BLE_GAP_EVENT_ADV_COMPLETE:
         ESP_LOGI("GAP", "BLE GAP EVENT");
@@ -126,6 +136,7 @@ void ble_init()
     ble_hs_cfg.sync_cb = ble_app_on_sync;      // 5 - Initialize application
 
     nimble_port_freertos_init(host_task);
+    pwm_init();
 }
 
 void ble_loop(void *param)
@@ -147,14 +158,14 @@ void ble_loop(void *param)
                 compressed_data[i] = (int8_t)((data[i] + 2) * 255.0 / 4 - 128.0);
             }
             
-            float prediction[3];
-            memcpy(prediction, &data[BLE_SAMPLE_SIZE], 3 * sizeof(float));
+            float prediction[FEATURES];
+            memcpy(prediction, &data[BLE_SAMPLE_SIZE], FEATURES * sizeof(float));
 
             int predicted_class = 0;
             float max_confidence = prediction[0];
 
             // Looking for a class with maximum confidence
-            for (int i = 1; i < 3; i++) {
+            for (int i = 1; i < FEATURES; i++) {
                 if (prediction[i] > max_confidence) {
                     max_confidence = prediction[i];
                     predicted_class = i;
@@ -164,7 +175,7 @@ void ble_loop(void *param)
             snprintf(stored_data, MAX_DATA_LEN, "%s, %.4f", gestures[predicted_class], max_confidence);
 
             ESP_LOGI(TAG, "prediction data:");
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < FEATURES; i++) {
                 ESP_LOGI(TAG, "[%d]: %.4f", i, prediction[i]);
             }
         
