@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.c" "ble_provider.c"
+idf_component_register(SRCS "pwm.c" "main.c" "ble_provider.c"
                             "mpu6050.c"
                             "gesture.cc"
                     INCLUDE_DIRS ".")

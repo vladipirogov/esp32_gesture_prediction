@@ -17,6 +17,7 @@
 
 #define TAG "GESTURE"
 #define SAMPLE_SIZE 125  
+#define FEATURES 4
 
 // TensorFlow Lite
 constexpr int kTensorArenaSize = 120 * 1024;
@@ -90,7 +91,7 @@ void collect_sensor_data(mpu6050_handle_t sensor, QueueHandle_t sensorQueue) {
         return;
     }
 
-    memcpy(&model_input->data.f[SAMPLE_SIZE * 3], output->data.f, 3 * sizeof(float));
+    memcpy(&model_input->data.f[SAMPLE_SIZE * 3], output->data.f, FEATURES * sizeof(float));
 
     portBASE_TYPE xStatus = xQueueSend(sensorQueue, &model_input->data.f, 0);
     if( xStatus != pdPASS ) {

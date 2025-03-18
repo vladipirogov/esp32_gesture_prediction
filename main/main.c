@@ -11,6 +11,7 @@
 #include "esp_system.h"
 #include "gesture.h"
 #include "ble_provider.h"
+#include "mpu6050.h"
 
 
 
@@ -65,6 +66,19 @@ static void i2c_scan() {
     }
 }
 
+void read_mpu6050_task(void *pvParameters) {
+    mpu6050_acce_value_t acce;
+    
+    for (int i = 0; i < 125; i++) {
+        mpu6050_get_acce(mpu6050, &acce);
+        
+        printf("%.2f,%.2f,%.2f\n", acce.acce_x, acce.acce_x, acce.acce_x);
+        vTaskDelay(pdMS_TO_TICKS(20)); 
+    }
+    vTaskDelete(NULL); 
+}
+
+
 void app_main(void)
 {
     ble_init();
@@ -78,6 +92,9 @@ void app_main(void)
     xTaskCreate(&ble_loop, "Heart Rate Simulation", 8 * 1024, (void*)sensorQueue, 6, NULL);
     MPUparams mpu_params = {mpu6050, sensorQueue};
     xTaskCreate(&gesture_predict, "Predict gesture", 8 * 1024, (void*)&mpu_params, 5, NULL);
+
+    //Task to collect a sensor data for learning the model
+    //xTaskCreate(&read_mpu6050_task, "read_mpu6050_task", 4096, NULL, 5, NULL);
 
     nimble_port_freertos_init(host_task);      // 6 - Run the thread
 }
